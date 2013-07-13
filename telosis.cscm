@@ -1,0 +1,61 @@
+;; TelosiS config and loader for interpreted CScheme.
+
+;; Syntax:
+
+;; I don't pretend to understand this at all. Lifted from SCOOPS.
+
+;;; Following hack courtesy of MIT Scheme support team:
+;;;   define-macro is for the compile-time stuff,
+;;;   syntax-table-define stuff does not tacke effect
+;;;     until load time.
+;;; So to get a macro to take effect at compile time and
+;;; also make it available at load time, use this:
+
+(define-macro (define-macro-both params  . body)
+  (let ((name (car params))
+        (params* (cdr params)))
+    `(begin
+       (define-macro ,params ,@body)
+       (syntax-table-define user-initial-syntax-table ',name
+         (macro ,params* ,@body)))))
+
+(syntax-table-define system-global-syntax-table 'define-macro-both
+  (macro (pattern . body)
+    `(begin
+       (define-macro ,pattern ,@body)
+       (syntax-table-define user-initial-syntax-table ',(car pattern)
+         (macro ,(cdr pattern)
+           ,@body)))))
+
+(define-macro-both (define-telos-syntax . forms)
+  `(define-macro-both ,@forms))
+
+;; Renaming:
+
+(define call/cc call-with-current-continuation)
+
+;; Portable extensions needed:
+
+(define *extension-files* '("gensym" "weak" "error"))
+
+;; Local extensions:
+
+(define simple-eval
+  (let ((env user-initial-environment))
+    (lambda (exp) (eval exp env))))
+
+(define (force-output x) #f)
+
+;; Load-up:
+
+(load "files.scm")
+
+(display "Loading TelosiS...")	
+(for-each load-telos-file (append *extension-files* *telos-files*))
+(display "hokay.")	
+
+;; Auto-start:
+
+(start-telosis *telosis-version* "CScheme")
+
+;; eof

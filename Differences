@@ -1,0 +1,99 @@
+There are a couple of sets of differences to come to terms with between
+this and Telos implementations of old - the first set being cosmetic
+and the second semantic.
+
+Cosmetic:
+
+o Uses the angle-bracket class naming convention - <object>, <class> etc.
+  Because I failed to come up with a pleasant print representation for
+  classes with names like these, although classes are bound this way,
+  angle-brackets are stripped away in documentary names.
+
+  So: (class-name <object>) -> object
+
+o Names have been "schemified" so defwop becomes define-wop in all cases.
+
+o Generic function definitions take the conventional scheme form rather
+  that lisp's i.e. (define-generic (wop (x <class>))) 
+              over (define-generic wop ((c <class>)))
+
+o Rather than implement setters in scheme, an 'accessor slot option
+  will instead lead to the creation of two seperate bindings:
+
+     (define-class <wop> (<object>) ((a accessor wop-a)))
+
+  will bind the class to <wop>, a reader to wop-a and a writer to set-wop-a!
+
+o For brevity, anything that was "generic-function" is now just "generic":
+    <generic>, generic-name, generic-methods etc.
+
+o No generic-labels. We rely on the local definition semantics
+  os schemes which support them in a sensible way.
+
+Semantic:
+
+o A define-class form with a null superclass specification will have
+  no superclasses instead of them being defaulted to (list <object>).
+
+o A generic function must specify which of its arguments are to be
+  discriminated on:
+
+    ;; 3 required, discriminate on just b:
+    (define-generic (wop a   
+			 (b <class>)
+			 c)) 
+
+    ;; 3 required, discriminate on a and c
+    (define-generic (wop (a <object>) 
+			 b 
+			 (c <integer>)))
+
+  Methods added to a generic must conform to this declaration. There
+  is no defaulting - all arguments that are discriminated on must have
+  a defined class:
+
+    (define-generic (map-sequence fn (s <sequence>)))
+
+    ;; OK:
+    (define-method (map-sequence fn (s <sequence>)) ...)
+
+    ;; Error: can't discriminate on the first argument...
+    (define-method (map-sequence (i <integer>) (s <sequence>)) ...)
+
+    ;; Error: not a subclass of <sequence>...
+    (define-method (map-sequence fn (s <object>)))
+
+    ;; Error: no class specified for discriminating argument...
+    (define-method (map-sequence fn seq))
+
+o It must be explicitly indicated if the options for a particular slot 
+  name in a define-class form are intended to override details of an
+  inherited slot of the same name. If not so indicated, a slot will be
+  assumed to be intended as a new one and an error will be reported if
+  there is an inherited slot of the same name. Similarly, an error is
+  reported if a not-existent inherited slot is declared as specialised.
+
+    (define-class <wop> (<ack>)
+
+      ((new1 accessor new1)                                   ;; new 
+       (new2 accessor new2)
+
+       ((specialise inherited1) initform 'something-new)      ;; modified
+       ((specialise inherited2) initform 'something-new-too))
+
+    )
+
+o The MOP is modified to support the above with the inclusion of:
+ 
+    (compute-defined-slot-description class def-spec)
+    (compute-defined-slot-description-class class def-spec)
+
+    (compute-specialised-slot-description class spec-spec inherited-sds)
+    (compute-specialised-slot-description-class class spec-spec inherited-sds)
+
+o Ranges can be declared in generic function definitions if you wish but
+  are entirely useless and prevent you adding any methods since you can't
+  declare return classes in method definitions!
+
+    (define-generic (wop (a <class>) b) -> <symbol>)
+

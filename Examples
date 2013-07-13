@@ -1,0 +1,287 @@
+;; A few examples:
+
+;
+;; What you get as standard:
+;
+
+;; --- 
+
+(define-abstract-class <appliance> (<object>) 
+
+  ((on? accessor appliance-on?
+	initform #f))          ;; default to being off
+
+  predicate appliance?)
+
+(define (appliance-off? a) (not (appliance-on? a)))
+(define-generic (switch-on (a <appliance>)))
+(define-generic (switch-off (a <appliance>)))
+
+(define-method (switch-on (a <appliance>))
+  (cond
+    ((appliance-on? a) (telos-warning "Appliance already on" a))
+    (else              (set-appliance-on?! a #t)))
+  a)
+
+(define-method (switch-off (a <appliance>))
+  (cond
+    ((appliance-on? a) (set-appliance-on?! a #f))
+    (else              (telos-warning "Appliance already off" a)))
+  a)
+
+(define-method (show (a <appliance>))
+  (display*
+    "#<" (class-name (class-of a)) ": "
+    (if (appliance-on? a) 'on 'off) ">")
+  a)
+
+;; ---
+
+(define-class <TV> (<appliance>)
+
+  ((channel  accessor TV-channel
+	     initform 0)
+   (channels reader TV-channels
+	     initform 10))
+  
+  initargs (channels)
+  predicate TV?
+  constructor (make-TV channels))
+
+(define-generic (change-channel (tv <TV>) chan))
+
+(define-method (change-channel (tv <TV>) chan)
+  ;; I ignore my buttons being pushed when I'm off...
+  (when (appliance-on? tv)
+    (unless (and (>= chan 0) (< chan (TV-channels tv)))
+      (telos-error "But I don't have that many channels" tv chan))
+    (set-TV-channel! tv chan))
+  tv)
+
+;; ---
+
+(define-class <flashing-light> (<appliance>) 
+
+  ((colour   reader flashing-light-colour
+	     initform 'green)
+   (interval reader flashing-light-interval
+	     initform 'random))
+
+  initargs (colour)
+  constructor (make-flashing-light colour))
+
+;; ---
+
+;; Capture the essential functionality of the super-computer:
+
+(define-class <CM5> (<appliance>)
+
+  ((flashing-lights accessor CM5-flashing-lights
+		    initform '()))
+
+  initargs (flashing-light-count)
+  constructor (make-CM5 flashing-light-count))
+
+(define-method (initialize (con <CM5>) init-list)
+  (call-next-method)
+  (let ((fl-count (init-list-ref init-list 
+				 'flashing-light-count
+				 (lambda () 57))))
+    (set-CM5-flashing-lights! 
+      con 
+      (let loop ((n fl-count))
+	(if (= n 0) '()
+	  (cons (make-flashing-light 'red) (loop (- n 1)))))))
+  con)
+
+(define-method (switch-on (con <CM5>))
+  (for-each switch-on (CM5-flashing-lights con))
+  (call-next-method))
+
+(define-method (switch-off (con <CM5>))
+  (for-each switch-off (CM5-flashing-lights con))
+  (call-next-method))
+    
+;; ---
+
+(define *house* (append (map make-TV '(10 20 30))
+			(map make-flashing-light '(red amber green))
+			(map make-CM5 '(2 4 8))))
+
+(define (get-home)
+  (for-each switch-on *house*)
+  (for-each 
+    (lambda (ap) 
+      (when (TV? ap) 
+	(show ap) (newline)
+	(change-channel ap 2)))
+    *house*))
+
+(define (go-out)
+  (for-each switch-off *house*))
+
+;; ---
+
+;
+;; Some noddy meta-level extensions:
+;
+  
+;; ---
+
+;; Classes that count the number of created instances.
+
+(define-metaclass <counting-class> (<class>)
+
+  ((count accessor counting-class-count
+	  initform 0))
+
+)
+
+(define-method (allocate (c <counting-class>) init-list)
+  (let ((new (call-next-method)))
+    (set-counting-class-count! c (+ (counting-class-count c) 1))
+    new))
+
+;; e.g.
+
+(define-class <counted> (<object>) (a b) metaclass <counting-class>)
+
+(counting-class-count <counted>)
+;; => 0
+
+(map (lambda (i) (make <counted>)) '(1 2 3 4 5))
+;; => (#<counted> ...)
+
+(counting-class-count <counted>)
+;; => 5
+
+;; ---
+
+;; Type enforced slots.
+
+(define-class <typed-slot-description> (<slot-description>)
+
+  ((type accessor typed-slot-description-type
+	 initform <object>))
+
+  initargs (type)
+
+)
+
+;; Change writers on slots of this class to do validate the value before
+;; setting.
+
+(define-method 
+  (compute-primitive-writer-using-slot-description 
+    (sd <typed-slot-description>)
+    class
+    sds)
+  (let ((write (call-next-method))
+	(type (typed-slot-description-type sd)))
+    (lambda (o val)
+      (unless (subclass? (class-of val) type)
+	(telos-error "invalid type" o sd val))
+      (write o val))))
+
+;; A metaclass to use this kind of slot description.
+
+(define-class <typed-slot-class> (<class>) () metaclass <metaclass>)
+
+(define-method (compute-defined-slot-description-class (c <typed-slot-class>)
+						       spec)
+  <typed-slot-description>)
+
+
+;; e.g.
+
+(define-class <class-list> (<object>)
+
+  ((head accessor head
+	 type <class>)
+   (tail accessor tail))
+
+  initargs (head tail)
+  metaclass <typed-slot-class>)
+
+(define l (make <class-list> 'head <object> 'tail '()))
+;; => #[<class-list>]
+
+;; (define l (make <class-list> 'head 42 'tail '()))
+;; would => telos error - invalid type
+
+;; ---
+
+;; A generic function with a simple trace facility.
+
+(define-class <traced-generic> (<generic>)
+
+  ((tracing-on? accessor traced-generic-tracing-on?
+		initform #f))
+
+  metaclass <callable-class>)
+
+(define-generic (trace-generic (gf <traced-generic>)))
+
+(define-method (trace-generic (gf <traced-generic>))
+  (set-traced-generic-tracing-on?! gf #t)
+  gf)
+
+(define-method (compute-discriminating-function (g <traced-generic>)
+						sig
+						lookup
+						methods)
+  (let ((fn (call-next-method)))
+    (lambda args
+      (cond
+        ((not (traced-generic-tracing-on? g)) 
+	  (apply fn args))
+	(else
+	  ;; I didn't say it was useful tracing...
+	  (display "IN") (newline)
+	  (let ((res (apply fn args)))
+	    (display "OUT") (newline)
+	    res))))))
+
+;; e.g.
+
+(define-generic (traced (x <object>)) class <traced-generic>)
+
+(define-method (traced (x <object>))
+  (display "DONE") (newline)
+  x)
+
+(traced 1)
+;; DONE -> 12
+
+(trace-generic traced)
+(traced 1)
+;; IN DONE OUT -> 1
+
+;; ---
+
+;; Backwards generic where the sorted applicable method list is reversed.
+
+(define-class <contrary-generic> (<generic>) () metaclass <callable-class>)
+
+(define-method (compute-method-lookup-function (gf <contrary-generic>)
+					       signature
+					       methods)
+  (let ((norm (call-next-method)))
+    (lambda args
+      (reverse (apply norm args)))))
+
+;; e.g.
+
+(define-generic (b-to-f (o <object>)) class <contrary-generic>)
+
+(define-method (b-to-f (o <object>))
+  (list 'object o (call-next-method)))
+
+(define-method (b-to-f (o <integer>))
+  (list 'int o))
+
+(b-to-f 42)
+;; -> (object 42 (int 42))
+
+;; eof
+

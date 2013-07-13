@@ -1,0 +1,9 @@
+Sadly, I only know how to pull off file compilation in T.
+
+With T: Load telosis interpreted by calling (load "telosis.t").
+        Compile the files by calling (compile-telosis).
+        Wait. (There'll be lots of "unreferenced variable" warnings flying
+        past to keep you amused.)
+        From now on the compiled telosis can be loaded by calling 
+          (load "telosis.t.c").
+

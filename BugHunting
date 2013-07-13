@@ -1,0 +1,16 @@
+Common problems:
+
+  o When using T, loading aborts with:
+
+	** Error: wrong number of arguments to procedure -
+	**        (DISPLAY "Loading TelosiS...")
+	**        DISPLAY takes at least 0 arguments.
+
+    or:
+
+	** Error: variable FOR-EACH is unbound
+
+    This happens if "telosis.t" or "telosis.t.c" are loaded before
+    a (scheme-reset) call had been made to put T into Scheme mode.
+    Call (scheme-reset) and reload the file.
+

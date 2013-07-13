@@ -1,0 +1,39 @@
+;; TelosiS config and loader for XScheme.
+
+;; Type "xscheme telosis.xscm" at the shell prompt.
+
+;; Syntax: (assumes "macros.ss" and "qquote.ss" have been loaded)
+
+(macro define-telos-syntax 
+  (lambda (form)
+    (apply
+      (lambda (name-vars . body)
+	`(macro ,(car name-vars) 
+	   (lambda (form)
+	     (apply (lambda ,(cdr name-vars) ,@body) (cdr form)))))
+      (cdr form))))
+
+;; Renaming:
+
+;; Portable extensions needed:
+
+(define *extension-files* '("weak"))
+
+;; Local extensions:
+
+(define (force-output x) x)
+(define simple-eval eval)
+
+;; Load-up:
+
+(load "files.scm")
+
+(display "Loading TelosiS. Have a coffee or something...")	
+(for-each load-telos-file (append *extension-files* *telos-files*))
+(display "hokay.")
+
+;; Auto-start:
+
+(start-telosis *telosis-version* "XScheme")
+
+;; eof
