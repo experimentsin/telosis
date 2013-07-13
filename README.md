@@ -1,7 +1,7 @@
 TelosiS
 =======
 
-An implementation of TeloS (EuLisp's reflective object system) in Scheme.
+An implementation of Telos (EuLisp's reflective object system) in Scheme.
 
 See the main ReadMe file for details of what it is and what it
 is not.
