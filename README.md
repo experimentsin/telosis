@@ -3,8 +3,13 @@ TelosiS
 
 An implementation of TeloS (EuLisp's reflective object system) in Scheme.
 
-See the main ReadMe file for details of exactly what it is and what it
+See the main ReadMe file for details of what it is and what it
 is not.
+
+The fun part (if such there is) is in mop.scm where, after a little
+bit of backstage bootstrap trickery, Telos itself is used to define
+Telos. No, really, that kind of metacircular stuff was still
+considered way-cool back in the early 90s...
 
 History
 -------
